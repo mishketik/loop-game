@@ -1,0 +1,298 @@
+<!-- Уровень: level2.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Time Loop Escape - Level 2</title>
+  <script src="level-progress.js"></script>
+  <style>
+    body {
+      background: #0f0f0f;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    #game {
+      display: grid;
+      grid-gap: 0;
+      margin: 0;
+      width: max-content;
+    }
+    .tile img {
+      display: block;
+      width: 48px;
+      height: 48px;
+    }
+    .entity {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      pointer-events: none;
+    }
+    #ui {
+      font-size: 18px;
+      margin: 10px 0;
+      color: #ccc;
+    }
+    #container {
+      position: relative;
+      width: fit-content;
+      height: fit-content;
+    }
+    #restart-level {
+      margin-top: 10px;
+      padding: 6px 12px;
+      font-size: 14px;
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      cursor: pointer;
+    }
+    #win-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      display: none;
+    }
+    #win-screen h2 {
+      font-size: 48px;
+      color: #0f0;
+      margin-bottom: 20px;
+    }
+    #next-level {
+      padding: 10px 20px;
+      font-size: 20px;
+      background: #0f0;
+      color: #000;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Time Loop Escape - Level 2</h1>
+  <div id="ui">
+    Cycle: <span id="cycle">1</span>
+    <br>
+    Time left: <span id="time-left">10.0</span>s
+    <br>
+    <button id="restart-level">Restart Level</button>
+  </div>
+  <div style="display: flex; justify-content: center;">
+  <div id="container">
+    <div id="game"></div>
+    <img id="player" class="entity" src="tiles/player.png" alt="Player">
+  </div>
+</div>
+  <div id="win-screen">
+    <h2>You Win!</h2>
+    <button id="next-level">Next Level</button>
+  </div>
+
+  <script>
+    let map = [
+      [1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,2,0,1,0,0,0,0,1],
+      [1,0,0,0,0,1,0,0,0,0,1],
+      [1,2,0,0,0,3,4,0,0,0,1],
+      [1,0,0,0,0,1,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1]
+    ];
+
+    const tileTypes = {
+      0: 'tiles/ground.png',
+      1: 'tiles/wall.png',
+      2: 'tiles/button.png',
+      3: 'tiles/door_closed.png'
+    };
+
+    const tileSize = 48;
+    const game = document.getElementById('game');
+    const tiles = [];
+    const cycleText = document.getElementById('cycle');
+    const container = document.getElementById('container');
+    const winScreen = document.getElementById('win-screen');
+    const nextLevelBtn = document.getElementById('next-level');
+
+    game.style.gridTemplateColumns = `repeat(${map[0].length}, ${tileSize}px)`;
+
+    function renderMap() {
+      game.innerHTML = '';
+      tiles.length = 0;
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[0].length; x++) {
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+
+          const img = document.createElement('img');
+          img.src = tileTypes[map[y][x]] || tileTypes[0];
+
+          tile.appendChild(img);
+          game.appendChild(tile);
+          tiles.push(tile);
+        }
+      }
+    }
+
+    container.style.width = `${map[0].length * tileSize}px`;
+    container.style.height = `${map.length * tileSize}px`;
+
+    let player = { x: 1, y: 1 };
+    let ghostHistory = [];
+    let ghosts = [];
+    let tick = 0;
+    let currentCycle = 1;
+    let gameEnded = false;
+
+    const playerImg = document.getElementById('player');
+    playerImg.style.zIndex = 10;
+
+    function updatePlayerPosition() {
+      playerImg.style.left = player.x * tileSize + 'px';
+      playerImg.style.top = player.y * tileSize + 'px';
+    }
+
+    function updateGhosts() {
+      ghosts.forEach(ghost => {
+        const ghostFrame = ghost.history[tick] || ghost.history[ghost.history.length - 1];
+        if (ghostFrame) {
+          ghost.img.style.left = ghostFrame.x * tileSize + 'px';
+          ghost.img.style.top = ghostFrame.y * tileSize + 'px';
+        }
+      });
+    }
+
+    function isBothButtonsPressed() {
+      const all = [player, ...ghosts.map(g => g.history[tick])];
+      return [
+        all.some(e => e && map[e.y][e.x] === 2 && e.x === 3 && e.y === 1),
+        all.some(e => e && map[e.y][e.x] === 2 && e.x === 1 && e.y === 3)
+      ].every(Boolean);
+    }
+
+    function updateMapLogic() {
+      if (isBothButtonsPressed()) {
+        map[3][5] = 0;
+      } else {
+        map[3][5] = 3;
+      }
+
+      renderMap();
+
+      if (!gameEnded && map[player.y][player.x] === 4) {
+        ghosts.forEach(g => g.img.remove());
+        ghosts.length = 0;
+        gameEnded = true;
+        winScreen.style.display = 'flex';
+      }
+    }
+
+    function recordPosition() {
+      ghostHistory.push({ x: player.x, y: player.y });
+    }
+
+    function resetLoop() {
+      if (gameEnded) return;
+
+      const ghostImg = document.createElement('img');
+      ghostImg.src = 'tiles/ghost.png';
+      ghostImg.className = 'entity';
+      ghostImg.style.opacity = 0.6;
+      ghostImg.style.zIndex = 5;
+      container.appendChild(ghostImg);
+
+      ghosts.push({ history: [...ghostHistory], img: ghostImg });
+      ghostHistory = [];
+      tick = 0;
+      currentCycle++;
+      cycleText.textContent = currentCycle;
+      player.x = 1;
+      player.y = 1;
+      updatePlayerPosition();
+    }
+
+    function move(dx, dy) {
+      const newX = player.x + dx;
+      const newY = player.y + dy;
+      if (
+        newX >= 0 && newX < map[0].length &&
+        newY >= 0 && newY < map.length &&
+        map[newY][newX] !== 1 && map[newY][newX] !== 3
+      ) {
+        player.x = newX;
+        player.y = newY;
+        updatePlayerPosition();
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowUp') move(0, -1);
+      if (e.key === 'ArrowDown') move(0, 1);
+      if (e.key === 'ArrowLeft') move(-1, 0);
+      if (e.key === 'ArrowRight') move(1, 0);
+    });
+
+    document.getElementById('restart-level').addEventListener('click', () => {
+      ghosts.forEach(g => g.img.remove());
+      ghosts.length = 0;
+      ghostHistory = [];
+      tick = 0;
+      currentCycle = 1;
+      cycleText.textContent = currentCycle;
+      player.x = 1;
+      player.y = 1;
+      updatePlayerPosition();
+      elapsed = 0;
+      lastTime = performance.now();
+    });
+
+    nextLevelBtn.addEventListener('click', () => {
+      saveProgress();
+      window.location.href = getNextLevelPath();
+    });
+
+    const loopLength = 5000;
+    let lastTime = performance.now();
+    let elapsed = 0;
+
+    function gameLoop(now) {
+      const delta = now - lastTime;
+      lastTime = now;
+      elapsed += delta;
+      const timeLeft = Math.max(0, ((loopLength - elapsed) / 1000).toFixed(1));
+      document.getElementById('time-left').textContent = timeLeft;
+
+      if (!gameEnded) {
+        recordPosition();
+        updateGhosts();
+        updateMapLogic();
+        tick++;
+      }
+
+      if (!gameEnded && elapsed >= loopLength) {
+        resetLoop();
+        elapsed = 0;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    renderMap();
+    updatePlayerPosition();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
